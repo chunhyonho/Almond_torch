@@ -1,6 +1,7 @@
 import pytorch_lightning as pl
 
 from .layers import *
+from .utils import EMISSION
 from torch.nn import functional as F
 
 from typing import Sequence
@@ -16,7 +17,7 @@ def ENCODER(model: str, input_dim: int, output_dim: int, hidden_dim: Sequence[in
 def DECODER(model: str, input_dim: int, output_dim: int, hidden_dim: Sequence[int] = [], **kwargs):
     if model == 'MLP':
         return MLP(
-            input_dim=input_dim, output_dim=output_dim, hidden_dim=hidden_dim
+            input_dim=input_dim, output_dim=output_dim, hidden_dim=hidden_dim, positive=True
         )
 
 
@@ -55,9 +56,9 @@ class VAE(pl.LightningModule):
             hidden_dim=kwargs.get('hidden_dim')[::-1]
         )
 
-
-    def from_pretrained(self, checkpoint_name):
-        return self.load_from_checkpoint(checkpoint_name, strict=False)
+        self.emission = EMISSION(
+            distribution='Poisson'
+        )
 
     def forward(self, x):
         mu = self.encoder_mu(x)
@@ -79,16 +80,15 @@ class VAE(pl.LightningModule):
         return p, q, z
 
     def step(self, batch, batch_idx):
-        x, y = batch
+        x, y, _ = batch
         z, x_hat, p, q = self._run_step(x)
 
-        recon_loss = F.mse_loss(x_hat, x, reduction="mean")
+        recon_loss = -(self.emission(x_hat).log_prob(x)).sum(dim=-1).mean()
 
         log_qz = q.log_prob(z)
         log_pz = p.log_prob(z)
 
-        kl = log_qz - log_pz
-        kl = kl.mean()
+        kl = (log_qz - log_pz).sum(dim=-1).mean()
 
         loss = kl + recon_loss
 
