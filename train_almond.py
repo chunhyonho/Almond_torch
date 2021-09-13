@@ -19,16 +19,16 @@ def cli_main():
     parser = ArgumentParser()
     parser.add_argument(
         '--ckpt_path',
-        default='checkpoints/VAE/trial_zhai/model_ckpt/epoch=4-step=244.ckpt',
+        default='checkpoints/VAE/trial_process/model_ckpt/epoch=4-step=484.ckpt',
         type=str
     )
-    parser.add_argument('--gpus', default=1, type=int)
+    parser.add_argument('--gpus', default=4, type=int)
     parser.add_argument('--max_epochs', default=5, type=int)
-    parser.add_argument('--num_workers', default=4, type=int)
-    parser.add_argument('--batch_size', default=512, type=int)
-    parser.add_argument('--data_name', default='zhai', type=str)
+    parser.add_argument('--num_workers', default=0, type=int)
+    parser.add_argument('--batch_size', default=1024, type=int)
+    parser.add_argument('--data_name', default='process', type=str)
     parser.add_argument('--step_size', default=0.02, type=float)
-    parser.add_argument('--total_step', default=10000, type=int)
+    parser.add_argument('--total_step', default=5000, type=int)
     args = parser.parse_args()
 
     vae = VAE.load_from_checkpoint(checkpoint_path=args.ckpt_path)
@@ -69,7 +69,7 @@ def cli_main():
     # ------------
 
     tb_logger = TensorBoardLogger(
-        save_dir='checkpoints', name='ALMOND', version='trial'
+        save_dir='checkpoints', name='ALMOND', version=f'trial_{args.data_name}'
     )
 
     model_checkpoint = ModelCheckpoint(
@@ -84,7 +84,7 @@ def cli_main():
         max_epochs=args.max_epochs,
         logger=tb_logger,
         callbacks=[model_checkpoint],
-        #plugins=DDPPlugin(find_unused_parameters=False)
+        plugins=DDPPlugin(find_unused_parameters=False)
     )
     trainer.fit(almond, train_loader, val_loader)
 

@@ -17,11 +17,11 @@ def cli_main():
     # ------------
 
     parser = ArgumentParser()
-    parser.add_argument('--gpus', default=1, type=int)
+    parser.add_argument('--gpus', default=2, type=int)
     parser.add_argument('--max_epochs', default=5, type=int)
     parser.add_argument('--batch_size', default=1024, type=int)
     parser.add_argument('--num_workers', default=4, type=int)
-    parser.add_argument('--data_name', default='zhai', type=str)
+    parser.add_argument('--data_name', default='process', type=str)
     parser.add_argument('--latent_dim', default=10, type=int)
     parser.add_argument('--output_dim', default=1000, type=int)
     parser.add_argument('--hidden_dim', nargs='+', default=[], type=int)
@@ -57,7 +57,7 @@ def cli_main():
     # ------------
 
     tb_logger = TensorBoardLogger(
-        save_dir='checkpoints', name='VAE', version='trial_zhai'
+        save_dir='checkpoints', name='VAE', version=f'trial_{args.data_name}'
     )
 
     model_checkpoint = ModelCheckpoint(
@@ -71,8 +71,8 @@ def cli_main():
         gpus=args.gpus,
         max_epochs=args.max_epochs,
         callbacks=[model_checkpoint],
-        logger=tb_logger
-        #plugins=DDPPlugin(find_unused_parameters=False)
+        logger=tb_logger,
+        plugins=DDPPlugin(find_unused_parameters=False)
     )
     trainer.fit(vae, train_loader, val_loader)
 

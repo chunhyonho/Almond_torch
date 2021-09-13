@@ -19,11 +19,11 @@ class MLP(nn.Module):
             [nn.Linear(dimension_chain[i], dimension_chain[i + 1]) for i in range(len(dimension_chain) - 1)]
         )
         self.relu = nn.ReLU()
-        self.softplus = nn.Softplus(beta=1)
+        self.softplus = nn.Softplus(beta=0.5)
         self.input_dim = input_dim
         self.output_dim = output_dim
 
-        self.positive=positive
+        self.positive = positive
 
     def forward(self, x):
         for i, l in enumerate(self.layers):
