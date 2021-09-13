@@ -1,25 +1,20 @@
-
 import math
 import torch
 import torch.nn as nn
-import torch.autograd as autograd
 import pytorch_lightning as pl
 
 from .utils import EMISSION
 
 
-def PRIOR(distribution: str, latent_dim: int):
-    if distribution == 'Gaussian':
-        return torch.distributions.Normal(
-            torch.zeros(latent_dim).cuda(),
-            torch.ones(latent_dim).cuda()
-        )
-
-
 def random_vector(dim):
     x = torch.randn(dim)
-    x.requires_grad = True
     return x
+
+
+def to_leaf(tensor):
+    t = tensor.detach().clone()
+    t.requires_grad = True
+    return t
 
 
 class ALMOND(pl.LightningModule):
@@ -45,11 +40,6 @@ class ALMOND(pl.LightningModule):
 
         self.decoder = decoder
 
-        self.prior = PRIOR(
-            distribution='Gaussian',
-            latent_dim=self.decoder.input_dim
-        )
-
         self.emission = EMISSION(
             distribution='Poisson'
         )
@@ -73,10 +63,13 @@ class ALMOND(pl.LightningModule):
 
         return particle
 
+    def prior(self, z):
+        return - z ** 2 / 2
+
     def log_likelihood(self, x, z):
         recon_x = self(z)
 
-        log_pz = self.prior.log_prob(z).sum(-1).mean()
+        log_pz = self.prior(z).sum(-1).mean()
         log_pxz = self.emission(recon_x).log_prob(x).sum(-1).mean()
 
         return log_pz + log_pxz
@@ -84,33 +77,33 @@ class ALMOND(pl.LightningModule):
     def langevin_sample(self, x, particle):
         score = self.grad_with_z(x, particle)
         return particle + self.hparams.step_size * score + math.sqrt(2 * self.hparams.step_size) * torch.randn(
-            particle.shape)
+            particle.shape, device=self.device)
 
     def grad_with_params(self, x, particle):
         log_likelihood = self.log_likelihood(x, particle)
         log_likelihood.backward()
-        return [- param.grad for param in self.parameters()]
+        return [- param.grad.detach() for param in self.parameters()]
 
     def grad_with_z(self, x, particle):
         log_likelihood = self.log_likelihood(x, particle)
-
-        log_likelihood.backward(retain_graph=True, inputs=[particle])
-        return particle.grad
+        log_likelihood.backward(inputs=[particle])
+        return particle.grad.detach()
 
     def training_step(self, batch, batch_idx):
         x, y, idx = batch
 
-        particle = torch.stack([self.particle_dict[f'particle_{i}'] for i in idx]).cuda()
+        particle = torch.stack([self.particle_dict[f'particle_{i}'] for i in idx]).to(self.device)
+        particle.requires_grad = True
 
         opt = self.optimizers()
         opt.zero_grad()
 
         mc_grad = self.grad_with_params(x, particle)
-        particle = self.langevin_sample(x, particle)
+        particle = to_leaf(self.langevin_sample(x, particle))
 
         for _ in range(self.hparams.total_step):
             mc_grad = [sum_grad + grad for sum_grad, grad in zip(mc_grad, self.grad_with_params(x, particle))]
-            particle = self.langevin_sample(x, particle)
+            particle = to_leaf(self.langevin_sample(x, particle))
 
         with torch.no_grad():
             for param, grad in zip(self.parameters(), mc_grad):
@@ -118,10 +111,8 @@ class ALMOND(pl.LightningModule):
 
         opt.step()
 
-        for i in idx:
-            self.particle_dict[f'particle_{i}'] = particle[i]
-
-        x_hat = self.decoder(particle)
+        for i, idx in enumerate(idx):
+            self.particle_dict[f'particle_{i}'] = particle[i].detach().cpu()
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.decoder.parameters(), lr=3e-4)

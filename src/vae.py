@@ -83,7 +83,7 @@ class VAE(pl.LightningModule):
         x, y, _ = batch
         z, x_hat, p, q = self._run_step(x)
 
-        recon_loss = -(self.emission(x_hat).log_prob(x)).sum(dim=-1).mean()
+        recon_loss = - (self.emission(x_hat).log_prob(x)).sum(dim=-1).mean()
 
         log_qz = q.log_prob(z)
         log_pz = p.log_prob(z)
