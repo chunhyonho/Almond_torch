@@ -21,7 +21,7 @@ def cli_main():
     parser.add_argument('--max_epochs', default=5, type=int)
     parser.add_argument('--batch_size', default=1024, type=int)
     parser.add_argument('--num_workers', default=4, type=int)
-    parser.add_argument('--data_name', default='process', type=str)
+    parser.add_argument('--data_name', default='mnist', type=str)
     parser.add_argument('--latent_dim', default=10, type=int)
     parser.add_argument('--output_dim', default=1000, type=int)
     parser.add_argument('--hidden_dim', nargs='+', default=[], type=int)

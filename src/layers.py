@@ -9,19 +9,18 @@ class MLP(nn.Module):
             self,
             input_dim: int,
             hidden_dim: Sequence[int],
-            output_dim: int,
             positive: bool = False
     ):
         super().__init__()
-        dimension_chain = list(chain([input_dim], hidden_dim, [output_dim]))
+        dimension_chain = list(chain([input_dim], hidden_dim))
 
         self.layers = nn.ModuleList(
             [nn.Linear(dimension_chain[i], dimension_chain[i + 1]) for i in range(len(dimension_chain) - 1)]
         )
         self.relu = nn.ReLU()
-        self.softplus = nn.Softplus(beta=0.5)
+        self.softplus = nn.Softplus()
         self.input_dim = input_dim
-        self.output_dim = output_dim
+        self.output_dim = hidden_dim[-1]
 
         self.positive = positive
 

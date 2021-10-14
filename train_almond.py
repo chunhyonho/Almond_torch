@@ -19,22 +19,21 @@ def cli_main():
     parser = ArgumentParser()
     parser.add_argument(
         '--ckpt_path',
-        default='checkpoints/VAE/trial_process/model_ckpt/epoch=4-step=484.ckpt',
+        default='checkpoints/VAE/trial_process/model_ckpt/epoch=4-step=124.ckpt',
         type=str
     )
     parser.add_argument('--gpus', default=4, type=int)
     parser.add_argument('--max_epochs', default=5, type=int)
     parser.add_argument('--num_workers', default=0, type=int)
     parser.add_argument('--batch_size', default=1024, type=int)
-    parser.add_argument('--data_name', default='process', type=str)
-    parser.add_argument('--step_size', default=0.02, type=float)
-    parser.add_argument('--total_step', default=5000, type=int)
+    parser.add_argument('--data_name', default='mnist', type=str)
+    parser.add_argument('--step_size', default=0.05, type=float)
+    parser.add_argument('--total_step', default=500, type=int)
     args = parser.parse_args()
 
     vae = VAE.load_from_checkpoint(checkpoint_path=args.ckpt_path)
 
-    encoder_mu = copy.deepcopy(vae.encoder_mu)
-    encoder_logvar = copy.deepcopy(vae.encoder_logvar)
+    encoder = copy.deepcopy(vae.encoder)
     decoder = copy.deepcopy(vae.decoder)
 
     del vae
@@ -54,10 +53,8 @@ def cli_main():
     # model
     # ------------
 
-
     almond = ALMOND(
-        encoder_mu=encoder_mu,
-        encoder_logvar=encoder_logvar,
+        encoder=encoder,
         decoder=decoder,
         step_size=args.step_size,
         total_step=args.total_step,
@@ -75,9 +72,22 @@ def cli_main():
     model_checkpoint = ModelCheckpoint(
         dirpath=os.path.join(tb_logger.log_dir, 'model_ckpt'),
         save_top_k=-1,
-        monitor='val_recon_loss',
+        monitor='train_recon_loss',
         auto_insert_metric_name=True,
     )
+
+    # ------------
+    # warm up
+    # ------------
+    (setup_train_loader, _), _ = get_dataloader(
+        name=args.data_name,
+        batch_size=args.batch_size,
+        num_workers=0,
+        train=True
+    )
+
+    for batch in setup_train_loader:
+        almond.warm_up_setup(batch)
 
     trainer = pl.Trainer(
         gpus=args.gpus,
