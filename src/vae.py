@@ -2,22 +2,42 @@ import pytorch_lightning as pl
 
 from .layers import *
 from .utils import EMISSION
-from torch.nn import functional as F
 
 from typing import Sequence
 
 
 def ENCODER(model: str, input_dim: int, output_dim: int, hidden_dim: Sequence[int] = [], **kwargs):
+    class ENC(nn.Module):
+        def __init__(self, shared_layer, latent_dim):
+            super().__init__()
+
+            self.layer = shared_layer
+            self.fc_mu = nn.Linear(self.layer.output_dim, latent_dim)
+            self.fc_logvar = nn.Linear(self.layer.output_dim, latent_dim)
+
+        def forward(self, x):
+            x = self.layer(x)
+
+            mu = self.fc_mu(x)
+            log_var = self.fc_logvar(x)
+
+            return mu, log_var
+
     if model == 'MLP':
-        return MLP(
-            input_dim=input_dim, output_dim=output_dim, hidden_dim=hidden_dim
+        return ENC(
+            shared_layer=MLP(
+                input_dim=input_dim,
+                hidden_dim=hidden_dim
+            ),
+            latent_dim=output_dim
         )
 
 
 def DECODER(model: str, input_dim: int, output_dim: int, hidden_dim: Sequence[int] = [], **kwargs):
+    hidden_dim = list(chain(hidden_dim, [output_dim]))
     if model == 'MLP':
         return MLP(
-            input_dim=input_dim, output_dim=output_dim, hidden_dim=hidden_dim, positive=True
+            input_dim=input_dim, hidden_dim=hidden_dim, positive=True
         )
 
 
@@ -29,20 +49,13 @@ class VAE(pl.LightningModule):
             output_dim: int,
             encoder: str,
             decoder: str,
-            learning_rate:float,
+            learning_rate: float,
             **kwargs
     ):
         super().__init__()
         self.save_hyperparameters()
 
-        self.encoder_mu = ENCODER(
-            model=encoder,
-            input_dim=output_dim,
-            output_dim=latent_dim,
-            hidden_dim=kwargs.get('hidden_dim')
-        )
-
-        self.encoder_logvar = ENCODER(
+        self.encoder = ENCODER(
             model=encoder,
             input_dim=output_dim,
             output_dim=latent_dim,
@@ -61,14 +74,12 @@ class VAE(pl.LightningModule):
         )
 
     def forward(self, x):
-        mu = self.encoder_mu(x)
-        log_var = self.encoder_logvar(x)
+        mu, log_var = self.encoder(x)
         p, q, z = self.sample(mu, log_var)
         return self.decoder(z)
 
     def _run_step(self, x):
-        mu = self.encoder_mu(x)
-        log_var = self.encoder_logvar(x)
+        mu, log_var = self.encoder(x)
         p, q, z = self.sample(mu, log_var)
         return z, self.decoder(z), p, q
 

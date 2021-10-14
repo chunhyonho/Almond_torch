@@ -17,12 +17,26 @@ def to_leaf(tensor):
     return t
 
 
+def negative_grad_detacher(x):
+    name, param = x
+    if not name.startswith('encoder.'):
+        return - param.grad.detach()
+    else:
+        return None
+
+
+def grad_sum(g1, g2):
+    if g1 is not None and g2 is not None:
+        return g1 + g2
+    else:
+        return None
+
+
 class ALMOND(pl.LightningModule):
 
     def __init__(
             self,
-            encoder_mu: nn.Module,
-            encoder_logvar: nn.Module,
+            encoder: nn.Module,
             decoder: nn.Module,
             step_size: float,
             total_step: int,
@@ -30,14 +44,15 @@ class ALMOND(pl.LightningModule):
             num_data: int
     ):
         super().__init__()
-        self.save_hyperparameters()
+        self.save_hyperparameters(
+            "step_size",
+            "total_step",
+            "batch_size",
+            "num_data"
+        )
 
-        for param in encoder_mu.parameters():
-            param.requires_grad = False
-
-        for param in encoder_logvar.parameters():
-            param.requires_grad = False
-
+        self.encoder = encoder
+        self.encoder.requires_grad_(False)
         self.decoder = decoder
 
         self.emission = EMISSION(
@@ -53,9 +68,13 @@ class ALMOND(pl.LightningModule):
     def forward(self, z):
         return self.decoder(z)
 
+    def warm_up_setup(self, batch) -> None:
+        x, y, idx = batch
+        self.particle_dict[f'particle_{idx}'] = self.encoder(x)
+
     def get_init_particle(self, x):
-        mu = self.encoder_mu(x)
-        std = torch.exp(self.encoder_logvar(x) / 2)
+        mu, log_var = self.encoder(x)
+        std = torch.exp(log_var / 2)
 
         # sample particle for z_init
         particle = torch.distributions.Normal(mu, std).rsample()
@@ -82,7 +101,7 @@ class ALMOND(pl.LightningModule):
     def grad_with_params(self, x, particle):
         log_likelihood = self.log_likelihood(x, particle)
         log_likelihood.backward()
-        return [- param.grad.detach() for param in self.parameters()]
+        return [negative_grad_detacher(name_param) for name_param in self.named_parameters()]
 
     def grad_with_z(self, x, particle):
         log_likelihood = self.log_likelihood(x, particle)
@@ -101,18 +120,44 @@ class ALMOND(pl.LightningModule):
         mc_grad = self.grad_with_params(x, particle)
         particle = to_leaf(self.langevin_sample(x, particle))
 
-        for _ in range(self.hparams.total_step):
-            mc_grad = [sum_grad + grad for sum_grad, grad in zip(mc_grad, self.grad_with_params(x, particle))]
+        for _ in range(self.hparams.total_step - 1):
+            mc_grad = [grad_sum(sum_grad, grad) for sum_grad, grad in zip(mc_grad, self.grad_with_params(x, particle))]
             particle = to_leaf(self.langevin_sample(x, particle))
 
         with torch.no_grad():
             for param, grad in zip(self.parameters(), mc_grad):
-                param.grad = grad / self.hparams.total_step
+                if grad is not None:
+                    param.grad = grad / self.hparams.total_step
+                else:
+                    param.grad = None
 
         opt.step()
 
         for i, idx in enumerate(idx):
             self.particle_dict[f'particle_{i}'] = particle[i].detach().cpu()
+
+        x_hat = self(particle)
+        recon_loss = - (self.emission(x_hat).log_prob(x)).sum(dim=-1).mean()
+        self.log(f"train_recon_loss", recon_loss, on_step=True, prog_bar=True, logger=True)
+
+        return recon_loss
+
+    def validation_step(self, batch, batch_idx):
+        torch.set_grad_enabled(True)
+
+        x, y, _ = batch
+
+        particle, _ = self.encoder(x)
+        particle.requires_grad = True
+
+        for _ in range(self.hparams.total_step):
+            particle = to_leaf(self.langevin_sample(x, particle))
+
+        x_hat = self(particle)
+        recon_loss = - (self.emission(x_hat).log_prob(x)).sum(dim=-1).mean()
+        self.log(f"val_recon_loss", recon_loss, prog_bar=True, logger=True, sync_dist=True)
+
+        torch.set_grad_enabled(False)
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.decoder.parameters(), lr=3e-4)

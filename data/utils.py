@@ -23,6 +23,16 @@ class SingleCellDataset(Dataset):
         return self.X[idx], self.y[idx], idx
 
 
+class MNISTDataset(MNIST):
+    def __init__(self, root: str, train: bool, download: bool, transform):
+        super().__init__(
+            root=root, train=train, download=download, transform=transform
+        )
+
+    def __getitem__(self, index):
+        return *super().__getitem__(index), index
+
+
 def get_dataloader(name: str, batch_size: int, num_workers: int = 0, train: bool = True):
     if name in ('zhai', 'pure', 'process'):
         if train:
@@ -47,7 +57,7 @@ def get_dataloader(name: str, batch_size: int, num_workers: int = 0, train: bool
         ])
 
         if train:
-            train_ds = MNIST(
+            train_ds = MNISTDataset(
                 root='data', train=True, download=True, transform=mnist_transform
             )
             train_ds, val_ds = random_split(
@@ -55,7 +65,7 @@ def get_dataloader(name: str, batch_size: int, num_workers: int = 0, train: bool
                 [int(TRAIN_VAL_RATIO * len(train_ds)), len(train_ds) - int(TRAIN_VAL_RATIO * len(train_ds))]
             )
         else:
-            test_ds = MNIST(
+            test_ds = MNISTDataset(
                 root='data', train=False, download=True, transform=mnist_transform
             )
 
