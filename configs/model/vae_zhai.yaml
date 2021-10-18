@@ -1,0 +1,14 @@
+_target_: src.vae.VAE
+
+output_dim: 1000
+latent_dim: 2
+
+learning_rate: 0.0003
+
+# Config Encoder
+encoder_architecture: MLP
+encoder_hidden_dim: [500, 500, 300] # from input -> latent dim
+
+# Config Decoder
+decoder_architecture: MLP
+decoder_hidden_dim: [500, 500, 700] # from latent -> input dim

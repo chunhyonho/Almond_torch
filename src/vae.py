@@ -47,30 +47,33 @@ class VAE(pl.LightningModule):
             self,
             latent_dim: int,
             output_dim: int,
-            encoder: str,
-            decoder: str,
+            encoder_architecture: str,
+            encoder_hidden_dim: list,
+            decoder_architecture: str,
+            decoder_hidden_dim: list,
             learning_rate: float,
             **kwargs
     ):
         super().__init__()
         self.save_hyperparameters()
 
+        # Encoder initialization
         self.encoder = ENCODER(
-            model=encoder,
+            model=encoder_architecture,
             input_dim=output_dim,
             output_dim=latent_dim,
-            hidden_dim=kwargs.get('hidden_dim')
+            hidden_dim=encoder_hidden_dim
         )
 
         self.decoder = DECODER(
-            model=decoder,
+            model=decoder_architecture,
             input_dim=latent_dim,
             output_dim=output_dim,
-            hidden_dim=kwargs.get('hidden_dim')[::-1]
+            hidden_dim=decoder_hidden_dim
         )
 
         self.emission = EMISSION(
-            distribution='Poisson'
+            distribution='Normal'
         )
 
     def forward(self, x):
@@ -93,7 +96,6 @@ class VAE(pl.LightningModule):
     def step(self, batch, batch_idx):
         x, y, _ = batch
         z, x_hat, p, q = self._run_step(x)
-
         recon_loss = - (self.emission(x_hat).log_prob(x)).sum(dim=-1).mean()
 
         log_qz = q.log_prob(z)
@@ -116,7 +118,7 @@ class VAE(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         loss, logs = self.step(batch, batch_idx)
-        self.log_dict({f"val_{k}": v for k, v in logs.items()}, sync_dist=True)
+        self.log_dict({f"val_{k}": v for k, v in logs.items()}, on_epoch=True, sync_dist=True, prog_bar=True)
         return loss
 
     def configure_optimizers(self):

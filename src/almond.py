@@ -41,14 +41,16 @@ class ALMOND(pl.LightningModule):
             step_size: float,
             total_step: int,
             batch_size: int,
-            num_data: int
+            num_train_data: int,
+            learning_rate: float
     ):
         super().__init__()
         self.save_hyperparameters(
             "step_size",
             "total_step",
             "batch_size",
-            "num_data"
+            "num_train_data",
+            "learning_rate"
         )
 
         self.encoder = encoder
@@ -56,11 +58,11 @@ class ALMOND(pl.LightningModule):
         self.decoder = decoder
 
         self.emission = EMISSION(
-            distribution='Poisson'
+            distribution='Normal'
         )
 
         self.particle_dict = {
-            f'particle_{i}': random_vector(self.decoder.input_dim) for i in range(num_data)
+            f'particle_{i}': random_vector(self.decoder.input_dim) for i in range(num_train_data)
         }
 
         self.automatic_optimization = False
@@ -111,7 +113,17 @@ class ALMOND(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         x, y, idx = batch
 
-        particle = torch.stack([self.particle_dict[f'particle_{i}'] for i in idx]).to(self.device)
+        last_particles = []
+        for i in idx:
+            try:
+                last_particle = self.particle_dict[f'particle_{i}']
+            except KeyError:
+                last_particle = random_vector(self.decoder.input_dim)
+                self.particle_dict[f'particle_{i}'] = last_particle
+
+            last_particles.append(last_particle)
+
+        particle = torch.stack(last_particles).to(self.device)
         particle.requires_grad = True
 
         opt = self.optimizers()
@@ -160,4 +172,4 @@ class ALMOND(pl.LightningModule):
         torch.set_grad_enabled(False)
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.decoder.parameters(), lr=3e-4)
+        return torch.optim.Adam(self.decoder.parameters(), lr=self.hparams.learning_rate)

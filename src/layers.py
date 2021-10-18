@@ -26,12 +26,15 @@ class MLP(nn.Module):
 
     def forward(self, x):
         for i, l in enumerate(self.layers):
+
             x = l(x)
 
             if i != len(self.layers) - 1:
                 x = self.relu(x)
 
+            #print(i, l.weight)
+
         if self.positive:
-            x = self.softplus(x)
+            x = torch.exp(x)
 
         return x

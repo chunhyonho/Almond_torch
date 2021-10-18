@@ -1,0 +1,17 @@
+# @package _global_
+
+defaults:
+  - override /trainer: ddp4.yaml
+  - override /model: vae_pure.yaml
+  - override /datamodule: pure.yaml
+
+experiment_name: vae_pure
+
+train_vae: True
+train_almond: False
+
+
+logger:
+  wandb:
+    name: ${experiment_name}
+    job_type: train
