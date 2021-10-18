@@ -1,0 +1,11 @@
+_target_: data.datamodules.singlecell.ZHAI_DataModule
+
+data_dir: ${work_dir}/data/SINGLECELL
+
+batch_size: 128
+num_workers: 4
+pin_memory: False
+
+# num_train_data and num_val_data must exceed batch_size
+num_train_data: 2404
+num_val_data: 300

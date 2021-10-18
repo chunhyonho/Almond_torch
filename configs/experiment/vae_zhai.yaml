@@ -1,0 +1,16 @@
+# @package _global_
+
+defaults:
+  - override /trainer: ddp2.yaml
+  - override /model: vae_zhai.yaml
+  - override /datamodule: zhai.yaml
+
+experiment_name: vae_zhai
+
+logger:
+  wandb:
+    name: ${experiment_name}
+    job_type: train
+
+train_vae: True
+train_almond: False

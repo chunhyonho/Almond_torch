@@ -1,5 +1,11 @@
 # Almond
 
+## Get Started
+- Python = 3.8
+
+```bash
+pip install -r requirements.txt
+```
 
 ## Training VAE
 Before training the decoder of ALMOND, you must train VAE.

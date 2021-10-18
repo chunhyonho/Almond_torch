@@ -1,0 +1,5 @@
+checkpoint_path: ${work_dir}/logs/vae_pure/2021-10-17-23-35/checkpoints/sample-epoch=99.ckpt
+
+step_size: 0.02
+total_step: 5000
+learning_rate: 3e-4
