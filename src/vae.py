@@ -1,7 +1,9 @@
 import pytorch_lightning as pl
 
+from torch.nn import functional as F
+
 from .layers import *
-from .utils import EMISSION
+from .distributions import EMISSION
 
 from typing import Sequence
 
@@ -33,11 +35,18 @@ def ENCODER(model: str, input_dim: int, output_dim: int, hidden_dim: Sequence[in
         )
 
 
-def DECODER(model: str, input_dim: int, output_dim: int, hidden_dim: Sequence[int] = [], **kwargs):
+def DECODER(
+        model: str,
+        input_dim: int,
+        output_dim: int,
+        hidden_dim: Sequence[int] = [],
+        positive_constraint: bool = False,
+        **kwargs
+):
     hidden_dim = list(chain(hidden_dim, [output_dim]))
     if model == 'MLP':
         return MLP(
-            input_dim=input_dim, hidden_dim=hidden_dim, positive=True
+            input_dim=input_dim, hidden_dim=hidden_dim, positive=positive_constraint
         )
 
 
@@ -51,6 +60,7 @@ class VAE(pl.LightningModule):
             encoder_hidden_dim: list,
             decoder_architecture: str,
             decoder_hidden_dim: list,
+            decoder_positive_constraint: bool,
             learning_rate: float,
             **kwargs
     ):
@@ -69,7 +79,8 @@ class VAE(pl.LightningModule):
             model=decoder_architecture,
             input_dim=latent_dim,
             output_dim=output_dim,
-            hidden_dim=decoder_hidden_dim
+            hidden_dim=decoder_hidden_dim,
+            positive_constraint=decoder_positive_constraint
         )
 
         self.emission = EMISSION(
@@ -83,25 +94,21 @@ class VAE(pl.LightningModule):
 
     def _run_step(self, x):
         mu, log_var = self.encoder(x)
-        p, q, z = self.sample(mu, log_var)
-        return z, self.decoder(z), p, q
 
-    def sample(self, mu, log_var):
         std = torch.exp(log_var / 2)
-        p = torch.distributions.Normal(torch.zeros_like(mu), torch.ones_like(std))
-        q = torch.distributions.Normal(mu, std)
-        z = q.rsample()
-        return p, q, z
+        z = self.sample(mu, std)
+        return self.decoder(z), mu, std
+
+    def sample(self, mu, std):
+        z = mu + std * torch.randn_like(mu)
+        return z
 
     def step(self, batch, batch_idx):
         x, y, _ = batch
-        z, x_hat, p, q = self._run_step(x)
-        recon_loss = - (self.emission(x_hat).log_prob(x)).sum(dim=-1).mean()
+        x_hat, mu, std = self._run_step(x)
+        recon_loss = F.mse_loss(x_hat.flatten(start_dim=1), x.flatten(start_dim=1), reduction='none').sum(dim=1).mean() / 2
 
-        log_qz = q.log_prob(z)
-        log_pz = p.log_prob(z)
-
-        kl = (log_qz - log_pz).sum(dim=-1).mean()
+        kl = 0.5 * torch.sum(mu ** 2 + std ** 2 - 2 * torch.log(std + 1e-10) - 1, 1).mean()
 
         loss = kl + recon_loss
 
@@ -122,4 +129,4 @@ class VAE(pl.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=self.hparams.learning_rate)
+        return torch.optim.AdamW(self.parameters(), lr=self.hparams.learning_rate)

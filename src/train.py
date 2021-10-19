@@ -20,7 +20,7 @@ from src.almond import ALMOND
 log = utils.get_logger(__name__)
 
 
-def get_model(config: DictConfig, model_name: str, num_train_data: int = 0):
+def get_model(config: DictConfig, model_name: str):
     if model_name == 'ALMOND':
         log.info(f"Instantiating model <ALMOND>")
         vae = VAE.load_from_checkpoint(config.model.checkpoint_path)
@@ -30,16 +30,17 @@ def get_model(config: DictConfig, model_name: str, num_train_data: int = 0):
 
         del vae
 
-        assert num_train_data > 0
-
         model: LightningModule = ALMOND(
             encoder=encoder,
             decoder=decoder,
-            step_size=config.model.step_size,
+            step_size_init=config.model.step_size_init,
             total_step=config.model.total_step,
+            num_chain=config.model.num_chain,
             batch_size=config.datamodule.batch_size,
-            num_train_data=num_train_data,
-            learning_rate=config.model.learning_rate
+            num_train_data=config.datamodule.num_train_data,
+            min_lr=config.model.min_lr,
+            max_lr=config.model.max_lr,
+            validation_total_step=config.model.validation_total_step
         )
 
     elif model_name == 'VAE':
@@ -72,8 +73,7 @@ def train(config: DictConfig, model_name='ALMOND') -> Optional[float]:
     # Init lightning model
     model: LightningModule = get_model(
         config=config,
-        model_name=model_name,
-        num_train_data=config.datamodule.num_train_data
+        model_name=model_name
     )
 
     # Init lightning callbacks

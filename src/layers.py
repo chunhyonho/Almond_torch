@@ -17,7 +17,8 @@ class MLP(nn.Module):
         self.layers = nn.ModuleList(
             [nn.Linear(dimension_chain[i], dimension_chain[i + 1]) for i in range(len(dimension_chain) - 1)]
         )
-        self.relu = nn.ReLU()
+        self.act = nn.Sigmoid()
+
         self.softplus = nn.Softplus()
         self.input_dim = input_dim
         self.output_dim = hidden_dim[-1]
@@ -30,9 +31,7 @@ class MLP(nn.Module):
             x = l(x)
 
             if i != len(self.layers) - 1:
-                x = self.relu(x)
-
-            #print(i, l.weight)
+                x = self.act(x)
 
         if self.positive:
             x = torch.exp(x)
