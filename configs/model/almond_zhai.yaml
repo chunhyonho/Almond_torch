@@ -1,5 +1,7 @@
 checkpoint_path: ${work_dir}/logs/vae_zhai/2021-10-17-23-34/checkpoints/sample-epoch=96.ckpt
 
-step_size: 0.02
+# Langevin diffusion configuration
+step_size_init: 0.02
+num_chain: 10
 total_step: 5000
-learning_rate: 3e-4
+learning_rate_init: 0.0003

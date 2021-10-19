@@ -1,0 +1,10 @@
+checkpoint_path: ${work_dir}/logs/vae_process/2021-10-18-19-34/checkpoints/sample-epoch=99.ckpt
+
+# Langevin diffusion configuration
+step_size_init: 0.02
+num_chain: 10
+total_step: 30
+validation_total_step: 1000
+min_lr: 0.00001
+max_lr: 0.0003
+step_size_up: 15

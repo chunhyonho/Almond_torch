@@ -1,0 +1,11 @@
+_target_: data.datamodules.mnist.MNISTDataloader
+
+data_dir: ${work_dir}/data
+
+batch_size: 256
+val_batch_size: 512
+num_workers: 4
+pin_memory: False
+
+num_train_data: 55000
+num_val_data: 5000
