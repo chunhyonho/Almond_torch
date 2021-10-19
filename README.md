@@ -1,37 +1,41 @@
-# Almond
+<h1 align="center">
+  <b>PyTorch ALMOND</b><br>
+</h1>
+<p align="center">
+    <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.8-blue.svg" /></a>
+    <a href="https://pytorch.org/get-started/locally/"><img alt="PyTorch" src="https://img.shields.io/badge/PyTorch-ee4c2c?logo=pytorch&logoColor=white"></a>
+    <a href="https://pytorchlightning.ai/"><img alt="Lightning" src="https://img.shields.io/badge/-Lightning-792ee5?logo=pytorchlightning&logoColor=white"></a>
+    <a href="https://hydra.cc/"><img alt="Config: Hydra" src="https://img.shields.io/badge/Config-Hydra-89b8cd"></a>
+    <a href="https://github.com/ashleve/lightning-hydra-template"><img alt="Template" src="https://img.shields.io/badge/-Lightning--Hydra--Template-017F2F?style=flat&logo=github&labelColor=gray"></a><br>
+</p>
 
-## Get Started
+## Requirements
 - Python = 3.8
+- PyTorch = 1.9
 
+### Installation
 ```bash
+git clone https://github.com/chunhyonho/Almond_torch.git
+cd Almond_torch
 pip install -r requirements.txt
 ```
 
-## Training VAE
-Before training the decoder of ALMOND, you must train VAE.
-```python
-python train_vae.py \
---gpus 4 \
---max_epochs 10 \
---data_name mnist \
---num_workers 4 \
---batch_size 512 \
---latent_dim 10 \
---output_dim 784 \ # When we use MNIST dataset
---hidden_dim 500 300 \ # The hidden dimensions of MLP (output_dim -> hidden_dim -> latent_dim)
---learning_rate 0.0003
+## Training VAE and ALMOND
+You can find configuration files at [here](configs/experiment). You can choose any of them and run.
+Details are explained at [here](configs/index.md)
+
+```bash
+python run.py experiment=<experiment_name>
 ```
 
-## Training Almond
-After training VAE is done, you can start training Almond with pretrained VAE.
+---
 
-```python
-python train_vae.py \
---gpus 4 \
---max_epochs 10 \
---data_name mnist \
---num_workers 4 \
---step_size 0.02 \
---total_step 10000 \
---batch_size 512
-```
+# Results
+
+## Single cell data
+
+### Zhai
+
+### Process
+
+### Pure
