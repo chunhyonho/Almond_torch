@@ -1,0 +1,17 @@
+# @package _global_
+
+defaults:
+  - override /trainer: ddp4.yaml
+  - override /model: vae_mnist.yaml
+  - override /datamodule: mnist.yaml
+
+experiment_name: vae_mnist
+
+train_vae: True
+train_almond: False
+
+
+logger:
+  wandb:
+    name: ${experiment_name}
+    job_type: train

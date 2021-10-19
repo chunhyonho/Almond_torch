@@ -12,3 +12,4 @@ encoder_hidden_dim: [500, 500, 300] # from input -> latent dim
 # Config Decoder
 decoder_architecture: MLP
 decoder_hidden_dim: [500, 500, 700] # from latent -> input dim
+decoder_positive_constraint: True
