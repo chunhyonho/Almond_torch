@@ -21,7 +21,9 @@ pip install -r requirements.txt
 ```
 
 ## Training VAE and ALMOND
-You can find configuration files at [here](configs/experiment). You can choose any of them and run
+You can find configuration files at [here](configs/experiment). You can choose any of them and run.
+Details are explained at [here](configs/index.md)
+
 ```bash
 python run.py experiment=<experiment_name>
 ```
