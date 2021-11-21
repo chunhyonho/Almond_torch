@@ -1,9 +1,13 @@
+_target_: src.almond.ALMOND
+
 checkpoint_path: ${work_dir}/logs/vae_pure/2021-10-18-23-29/checkpoints/sample-epoch=478.ckpt
 
 # Langevin diffusion configuration
 step_size_init: 0.02
-num_chain: 10
-total_step: 30
+num_chain: 32
+total_step: 8
 validation_total_step: 1000
+num_latent_variable_samples: 300
+
 min_lr: 0.0001
 max_lr: 0.0003

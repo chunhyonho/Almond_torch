@@ -6,5 +6,5 @@ gpus: 0
 max_epochs: 500
 min_epochs: 100
 
-weights_summary: null
+enable_model_summary: True
 progress_bar_refresh_rate: 5

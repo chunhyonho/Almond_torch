@@ -1,10 +1,25 @@
+import os
+import copy
 import math
 import torch
+import io
+from PIL import Image
 import torch.nn as nn
 from torch.nn import functional as F
 import pytorch_lightning as pl
+import matplotlib.pyplot as plt
 
+from .vae import VAE
 from .distributions import EMISSION
+
+from typing import Optional
+
+
+def extract(dictionary: dict, keys: list):
+    output = {
+        k: dictionary[k] for k in keys
+    }
+    return output
 
 
 def random_vector(shape):
@@ -42,35 +57,35 @@ def tile(tensor, n):
 
 
 class ALMOND(pl.LightningModule):
-
     def __init__(
             self,
-            encoder: nn.Module,
-            decoder: nn.Module,
+            checkpoint_path: str,
             step_size_init: float,
             total_step: int,
             num_chain: int,
-            batch_size: int,
-            num_train_data: int,
             min_lr: float,
             max_lr: float,
-            validation_total_step: int
+            validation_total_step: int,
+            num_latent_variable_samples: int,
+            burn_in: int = 100,
+            batch_size: Optional[int] = None,
+            num_train_data: Optional[int] = None,
+            **kwargs
     ):
         super().__init__()
-        self.save_hyperparameters(
-            "step_size_init",
-            "total_step",
-            "num_chain",
-            "batch_size",
-            "num_train_data",
-            "min_lr",
-            "max_lr",
-            "validation_total_step"
+        self.save_hyperparameters()
+
+        vae = VAE.load_from_checkpoint(
+            self.hparams.checkpoint_path
         )
 
-        self.encoder = encoder
+        self.encoder = copy.deepcopy(vae.encoder)
+        self.decoder = copy.deepcopy(vae.decoder)
         self.encoder.requires_grad_(False)
-        self.decoder = decoder
+
+        del vae
+
+        #self.optim_state = torch.load(checkpoint_path)['optimizer_states']
 
         self.emission = EMISSION(
             distribution='Normal'
@@ -112,7 +127,7 @@ class ALMOND(pl.LightningModule):
         """
         It returns '- d (log_likelihood) / d (param)'
         """
-        log_likelihood = self.log_likelihood(x, particle) /(self.hparams.num_chain * self.hparams.batch_size)
+        log_likelihood = self.log_likelihood(x, particle) / (self.hparams.num_chain * self.hparams.batch_size)
         log_likelihood.backward()
         return [negative_grad_detacher(name_param) for name_param in self.named_parameters()]
 
@@ -126,8 +141,13 @@ class ALMOND(pl.LightningModule):
 
     @property
     def current_step_size(self):
-        return max(self.hparams.step_size_init / 10.0,
-                   self.hparams.step_size_init / math.pow(self.current_epoch + 1.0, 0.5))
+        return max(
+            self.hparams.step_size_init / 10.0,
+            self.hparams.step_size_init / math.pow(self.current_epoch + 1.0, 0.5)
+        )
+
+    # def on_validation_epoch_start(self) -> None:
+    #     os.makedirs(os.path.join(self.logger.log_dir, "scatter_plot"), exist_ok=True)
 
     def training_step(self, batch, batch_idx):
         x, y, indices = batch
@@ -147,20 +167,25 @@ class ALMOND(pl.LightningModule):
 
             last_particles.append(last_particle)
 
-        x_tiled = tile(x, self.hparams.num_chain)
 
-        # particle : num_chain x batch_size x latent_dim
+        ## particle : num_chain x batch_size x latent_dim
         particle = torch.stack(last_particles, dim=1).to(self.device)
         particle.requires_grad = True
 
         opt = self.optimizers()
         opt.zero_grad()
 
-        mc_grad = self.grad_with_params(x_tiled, particle)
-        particle = to_leaf(self.langevin_chain(x_tiled, particle))
+        x_tiled = tile(x, self.hparams.num_chain)
+
+        for _ in range(5):
+            mc_grad = self.grad_with_params(x_tiled, particle)
+            particle = to_leaf(self.langevin_chain(x_tiled, particle))
 
         for _ in range(self.hparams.total_step - 1):
-            mc_grad = [grad_sum(sum_grad, grad) for sum_grad, grad in zip(mc_grad, self.grad_with_params(x_tiled, particle))]
+            mc_grad = [
+                grad_sum(sum_grad, grad) for sum_grad, grad in
+                zip(mc_grad, self.grad_with_params(x_tiled, particle))
+            ]
             particle = to_leaf(self.langevin_chain(x_tiled, particle))
 
         with torch.no_grad():
@@ -198,13 +223,12 @@ class ALMOND(pl.LightningModule):
         for i in range(self.hparams.validation_total_step):
             particle = to_leaf(self.langevin_chain(x, particle))
 
-            if i >= self.hparams.validation_total_step - 100:
+            if i >= self.hparams.validation_total_step - self.hparams.num_latent_variable_samples:
                 particles.append(particle)
 
         particles = torch.stack(particles)
 
-        x_hat = self(particles).mean(dim=0)  # batch_size x data_dim
-        # recon_loss = - (self.emission(x_hat).log_prob(x)).sum(dim=-1).mean()
+        x_hat = self.decoder(particles).mean(dim=0)  # x_hat : batch_size x data_dim
         recon_loss = F.mse_loss(
             x_hat, x, reduction='none'
         ).sum(dim=tuple(range(1, x.dim()))).mean() / 2
@@ -213,13 +237,51 @@ class ALMOND(pl.LightningModule):
 
         torch.set_grad_enabled(False)
 
+        return particles.mean(0), y
+
+    def validation_epoch_end(self, outputs) -> None:
+
+        latents = []
+        labels = []
+
+        for z, y in outputs:
+            latents.append(z)
+            labels.append(y)
+
+        latents = torch.stack(latents).cpu()
+        labels = torch.stack(labels).cpu()
+
+        plt.figure(figsize=(8, 8))
+        for c in torch.unique(labels):
+            z_c = latents[labels == c]
+            plt.scatter(z_c[:, 0], z_c[:, 1], label=f'{int(c)}')
+
+        plt.legend()
+
+        img_buf = io.BytesIO()
+        plt.savefig(img_buf, format='png')
+        im = Image.open(img_buf)
+
+        self.logger.log_image(
+            key="Scatter Plot", images=[im]
+        )
+        img_buf.close()
+
+
+
+
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.decoder.parameters(), lr=self.hparams.max_lr)
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.max_lr)
+
+        # scheduler = torch.optim.lr_scheduler.CyclicLR(
+        #     optimizer, base_lr = self.hparams.min_lr, max_lr = self.hparams.max_lr, step_size_up=100, mode='triangular'
+        # )
+
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+            optimizer, T_0=100, eta_min=self.hparams.min_lr
+        )
+
         return {
             "optimizer": optimizer,
-            "lr_scheduler": {
-                "scheduler": torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
-                    optimizer, T_0=5, eta_min=self.hparams.min_lr
-                )
-            }
+            "lr_scheduler": {"scheduler": scheduler}
         }

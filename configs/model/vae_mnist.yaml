@@ -1,15 +1,17 @@
 _target_: src.vae.VAE
 
 output_dim: 784
-latent_dim: 20
+latent_dim: 2
+image: True
 
 learning_rate: 0.0003
+num_latent_variable_samples: 300
 
 # Config Encoder
 encoder_architecture: MLP
-encoder_hidden_dim: [500, 500] # from input -> latent dim
+encoder_hidden_dim: [128, 128] # from input -> latent dim
 
 # Config Decoder
 decoder_architecture: MLP
-decoder_hidden_dim: [500, 500] # from latent -> input dim
+decoder_hidden_dim: [128, 128] # from latent -> input dim
 decoder_positive_constraint: False
