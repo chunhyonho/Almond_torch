@@ -14,46 +14,11 @@ from pytorch_lightning import (
 from pytorch_lightning.loggers import LightningLoggerBase
 
 from src import utils
-from src.vae import VAE
-from src.almond import ALMOND
 
 log = utils.get_logger(__name__)
 
 
-def get_model(config: DictConfig, model_name: str):
-    if model_name == 'ALMOND':
-        log.info(f"Instantiating model <ALMOND>")
-        vae = VAE.load_from_checkpoint(config.model.checkpoint_path)
-
-        encoder = copy.deepcopy(vae.encoder)
-        decoder = copy.deepcopy(vae.decoder)
-
-        del vae
-
-        model: LightningModule = ALMOND(
-            encoder=encoder,
-            decoder=decoder,
-            step_size_init=config.model.step_size_init,
-            total_step=config.model.total_step,
-            num_chain=config.model.num_chain,
-            batch_size=config.datamodule.batch_size,
-            num_train_data=config.datamodule.num_train_data,
-            min_lr=config.model.min_lr,
-            max_lr=config.model.max_lr,
-            validation_total_step=config.model.validation_total_step
-        )
-
-    elif model_name == 'VAE':
-        log.info(f"Instantiating model <{config.model._target_}>")
-        model: LightningModule = hydra.utils.instantiate(config.model)
-
-    else:
-        raise NotImplementedError
-
-    return model
-
-
-def train(config: DictConfig, model_name='ALMOND') -> Optional[float]:
+def train(config: DictConfig) -> Optional[float]:
     """Contains training pipeline.
     Instantiates all PyTorch Lightning objects from config.
     Args:
@@ -71,9 +36,11 @@ def train(config: DictConfig, model_name='ALMOND') -> Optional[float]:
     datamodule: LightningDataModule = hydra.utils.instantiate(config.datamodule)
 
     # Init lightning model
-    model: LightningModule = get_model(
-        config=config,
-        model_name=model_name
+    log.info(f"Instantiating model <{config.model._target_}>")
+    model: LightningModule = hydra.utils.instantiate(
+        config.model,
+        batch_size=config.datamodule.batch_size,
+        num_train_data=config.datamodule.num_train_data
     )
 
     # Init lightning callbacks
@@ -85,12 +52,8 @@ def train(config: DictConfig, model_name='ALMOND') -> Optional[float]:
                 callbacks.append(hydra.utils.instantiate(cb_conf))
 
     # Init lightning loggers
-    logger: List[LightningLoggerBase] = []
-    if "logger" in config:
-        for _, lg_conf in config.logger.items():
-            if "_target_" in lg_conf:
-                log.info(f"Instantiating logger <{lg_conf._target_}>")
-                logger.append(hydra.utils.instantiate(lg_conf))
+    log.info(f"Instantiating logger <{config.logger._target_}>")
+    logger: LightningModule = hydra.utils.instantiate(config.logger)
 
     # Init lightning trainer
     log.info(f"Instantiating trainer <{config.trainer._target_}>")

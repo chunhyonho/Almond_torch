@@ -9,7 +9,8 @@ class MLP(nn.Module):
             self,
             input_dim: int,
             hidden_dim: Sequence[int],
-            positive: bool = False
+            positive: bool = False,
+            dropout: float = 0.2
     ):
         super().__init__()
         dimension_chain = list(chain([input_dim], hidden_dim))
@@ -18,6 +19,7 @@ class MLP(nn.Module):
             [nn.Linear(dimension_chain[i], dimension_chain[i + 1]) for i in range(len(dimension_chain) - 1)]
         )
         self.act = nn.Sigmoid()
+        self.dropout = nn.Dropout(p=dropout)
 
         self.softplus = nn.Softplus()
         self.input_dim = input_dim
@@ -31,7 +33,7 @@ class MLP(nn.Module):
             x = l(x)
 
             if i != len(self.layers) - 1:
-                x = self.act(x)
+                x = self.dropout(self.act(x))
 
         if self.positive:
             x = torch.exp(x)
