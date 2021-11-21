@@ -26,6 +26,7 @@ callbacks:
     _target_: pytorch_lightning.callbacks.ModelCheckpoint
     monitor: "val_recon_loss"
     save_top_k: -1
+    every_n_epochs: 5
     save_last: True
     mode: "min"
     dirpath: "checkpoints/"
@@ -38,13 +39,12 @@ callbacks:
 
 
 logger:
-  wandb:
-    _target_: pytorch_lightning.loggers.wandb.WandbLogger
-    project: "[Samsung Project] ALMOND"
-    save_dir: "."
-    id: null # pass correct id to resume experiment!
-    log_model: False
-    tags: []
+  _target_: pytorch_lightning.loggers.wandb.WandbLogger
+  project: "[Samsung Project] ALMOND"
+  save_dir: "."
+  id: null # pass correct id to resume experiment!
+  log_model: False
+  tags: []
 
 # use `python run.py debug=true` for easy debugging!
 # this will run 1 train, val and test loop with only 1 batch

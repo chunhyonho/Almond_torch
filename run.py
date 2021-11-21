@@ -11,11 +11,7 @@ def main(config: DictConfig):
         utils.print_config(config, resolve=True)
 
     # job type is train or test
-    if config.get("train_vae"):
-        train(config=config, model_name='VAE')
-
-    if config.get("train_almond"):
-        train(config=config, model_name='ALMOND')
+    train(config=config)
 
 
 if __name__ == "__main__":
